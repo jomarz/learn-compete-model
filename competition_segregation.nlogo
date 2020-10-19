@@ -18,7 +18,7 @@ globals [
 turtles-own [ ; Each turtle is a player
   rating ; Elo rating of the player
   sex
-  preference ; In case of female players, probability they will choose to play in a female tournament over an open one
+  tournament_preference ; In case of female players, probability they will choose to play in a female tournament over an open one
   k ; K-factor of the Elo system
   learning ; Represents learning
   benefit_history
@@ -27,14 +27,13 @@ turtles-own [ ; Each turtle is a player
   current_tournament_wins
   opponent_history
   has_opponent?
-  playing? ; Whether the player has alredy played in the current round or not
 ]
 
 to setup
   clear-all
   reset-ticks
   set NUM_PLAYERS 1369
-  set FEMALE_FRACTION 0.015
+  set FEMALE_FRACTION 0.5
   set MEAN_RATING_MEN 2000
   set MEAN_RATING_WOMEN 1850
   set SD_RATING_MEN 200
@@ -48,11 +47,11 @@ to setup
   ask patches [
     ifelse random-float 1 <= FEMALE_FRACTION [ ; New female turtle
       sprout 1 [
-        set sex "F"
+        set sex "W"
         set rating precision (random-normal MEAN_RATING_WOMEN SD_RATING_WOMEN) 0 ; Initial rating is normally distributed
         set color getColor rating sex
         set k get-k-factor rating
-        set preference 1 ; Probability that a female player chooses to play in a female-only tournament
+        set tournament_preference 1 ; Probability that a female player chooses to play in a female-only tournament
         set learning 0 ; Initial total learning
         set benefit_history []
         set size 0.8
@@ -65,7 +64,7 @@ to setup
         set rating precision (random-normal MEAN_RATING_MEN SD_RATING_MEN) 0 ; Initial rating is normally distributed
         set color getColor rating sex
         set k get-k-factor rating
-        set preference 0  ; For redundance. Male players can't choose to play a female-only tournament
+        set tournament_preference 0  ; For redundance. Male players dont- get to choose to play a female-only tournament anyway
         set learning 0 ; Initial total learning
         set benefit_history []
         set size 0.8
@@ -73,8 +72,84 @@ to setup
       ]
     ]
   ]
+  update-plots
 end
 
+to go
+  assign-tournaments
+  play-tournaments
+end
+
+to assign-tournaments
+ let i 1
+ let j 1
+ let w_tournament_index 1
+ let w_counter 0
+ let o_tournament_index 1
+ let o_counter 0
+ foreach reverse sort-on [rating] turtles [
+    player -> ask player [
+      set current_tournament_wins 0
+      set opponent_history []
+      set has_opponent? false
+      ifelse sex = "W" [
+        ifelse random-float 1 <= tournament_preference [
+          set current_tournament w_tournament_index
+          set current_tournament_type "women's"
+          set w_counter w_counter + 1 ; 1 more player in the current female tournament
+          if w_counter = NUM_PLAYERS_TOURNAMENT [
+            set w_tournament_index w_tournament_index + 1 ; Create new female tournament
+            set w_counter 0 ; new female tournament has zero players
+          ]
+        ]
+        [
+          set current_tournament o_tournament_index
+          set current_tournament_type "open"
+          set o_counter o_counter + 1 ; One more player in the current open tournament
+          if o_counter = NUM_PLAYERS_TOURNAMENT [
+            set o_tournament_index o_tournament_index + 1 ; Create new open tournament
+            set o_counter 0 ; New open tournament has zero players
+          ]
+        ]
+      ]
+      [ ; player is not female, so we assign him to an open tournament
+        set current_tournament o_tournament_index
+        set current_tournament_type "open"
+        set o_counter o_counter + 1 ; One more player in the current open tournament
+        if o_counter = NUM_PLAYERS_TOURNAMENT [
+          set o_tournament_index o_tournament_index + 1 ; Create new open tournament
+          set o_counter 0 ; New open tournament has zero players
+        ]
+      ]
+    ]
+  ]
+  if w_counter < NUM_PLAYERS_TOURNAMENT / 2 [
+    ask turtles with [ (current_tournament = w_tournament_index) and (current_tournament_type = "women's") ] [
+      set current_tournament current_tournament - 1
+    ]
+  ]
+  if o_counter < NUM_PLAYERS_TOURNAMENT / 2 [
+    ask turtles with [ (current_tournament = o_tournament_index) and (current_tournament_type = "open") ] [
+      set current_tournament current_tournament - 1
+    ]
+  ]
+end
+
+to play-tournaments
+  let w_tournaments max [current_tournament] of turtles with [current_tournament_type = "women's"]
+  let o_tournaments max [current_tournament] of turtles with [current_tournament_type = "open"]
+  foreach n-values w_tournaments [ i -> i + 1] [ ; play every women's tournament
+   num_tournament -> play-one-tournament num_tournament "women's"
+  ]
+  foreach n-values o_tournaments [ i -> i + 1] [ ; play every open tournament
+   num_tournament -> play-one-tournament num_tournament "open"
+  ]
+end
+
+to play-one-tournament [num_tournament tournament_type]
+  let players reverse sort-on [rating] turtles with [ (current_tournament = num_tournament) and (current_tournament_type = tournament_type) ]
+
+end
 
 to-report get-k-factor [rating1]
   ; Returns the k factor of a player with rating rating1
@@ -89,7 +164,7 @@ to-report getColor [rtng s]
   if s = "M" [
     report 69 - 7.5 * (exp ((rtng - center) / flatness) / (exp ((rtng - center) / flatness) + 1))
   ]
-  if s = "F"[
+  if s = "W"[
     report 29 - 7.5 * (exp ((rtng - center) / flatness) / (exp ((rtng - center) / flatness) + 1))
   ]
 end
@@ -97,8 +172,8 @@ end
 GRAPHICS-WINDOW
 132
 10
-569
-448
+621
+500
 -1
 -1
 13.0
@@ -111,10 +186,10 @@ GRAPHICS-WINDOW
 1
 1
 1
--16
-16
--16
-16
+-18
+18
+-18
+18
 0
 0
 1
@@ -137,6 +212,42 @@ S
 NIL
 NIL
 1
+
+BUTTON
+41
+94
+105
+129
+Go
+go
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+PLOT
+648
+14
+952
+257
+Ratings Men
+Rating
+NIL
+1000.0
+3000.0
+0.0
+300.0
+true
+false
+"" ""
+PENS
+"default" 1.0 1 -10899396 true "" "set-histogram-num-bars 20\nhistogram ([rating] of turtles with [sex = \"M\"])"
+"pen-1" 1.0 1 -955883 true "" "set-histogram-num-bars 20\nhistogram ([rating] of turtles with [sex = \"W\"])"
 
 @#$#@#$#@
 ## WHAT IS IT?
