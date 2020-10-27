@@ -27,6 +27,7 @@ turtles-own [ ; Each turtle is a player
   current_tournament_wins
   opponent_history
   has_opponent?
+  games_played
 ]
 
 to setup
@@ -40,9 +41,9 @@ to setup
   set SD_RATING_WOMEN 200
   set NUM_PLAYERS_TOURNAMENT 100
   set ROUNDS 8
-  set MAX_BENEFIT 100
+  set MAX_BENEFIT 50
   set IDEAL_CHALLENGE 100
-  set BENEFIT_SPREAD 100
+  set BENEFIT_SPREAD 80
   set NUM_LEARNING_GAMES 30
   ask patches [
     ifelse random-float 1 <= FEMALE_FRACTION [ ; New female turtle
@@ -53,9 +54,10 @@ to setup
         set k get-k-factor rating
         set tournament_preference 1 ; Probability that a female player chooses to play in a female-only tournament
         set learning 0 ; Initial total learning
-        set benefit_history []
+        set benefit_history [0 0]
         set size 0.9
         set shape "triangle"
+        set games_played 0
       ]
     ]
     [ ; Else, new male turtle
@@ -66,9 +68,10 @@ to setup
         set k get-k-factor rating
         set tournament_preference 0  ; For redundance. Male players dont- get to choose to play a female-only tournament anyway
         set learning 0 ; Initial total learning
-        set benefit_history []
+        set benefit_history [0 0]
         set size 0.8
         set shape "circle"
+        set games_played 0
       ]
     ]
   ]
@@ -256,29 +259,52 @@ end
 
 to play-game [playerA playerB]
   if playerB = nobody [inspect playerA show playerA]
-  let benefit_A MAX_BENEFIT * exp (-(( [rating] of playerB - [rating] of playerA - IDEAL_CHALLENGE ) ^ 2) / BENEFIT_SPREAD)
-  let benefit_B MAX_BENEFIT * exp (-(( [rating] of playerA - [rating] of playerB - IDEAL_CHALLENGE ) ^ 2) / BENEFIT_SPREAD)
+  let I_A [rating] of playerA + mean ([benefit_history] of playerA)
+  let I_B [rating] of playerB + mean ([benefit_history] of playerB)
+  let benefit_A precision (MAX_BENEFIT * exp (-(( ([rating] of playerB - [rating] of playerA - IDEAL_CHALLENGE) / BENEFIT_SPREAD ) ^ 2)) ) 3
+  let benefit_B precision (MAX_BENEFIT * exp (-(( ([rating] of playerA - [rating] of playerB - IDEAL_CHALLENGE) / BENEFIT_SPREAD ) ^ 2)) ) 3
+  ;show (word [rating] of playerA "  " [rating] of playerB "  " benefit_A)
   ; FALTA agregar el learning a la historia
 
   ; FALTA incluir el aprendizaje en la predicción del desarrollo de la partida
 
-  let expected_A precision (1 / (1 + (10 ^ ((([rating] of playerB) - ([rating] of playerA)) / 400)))) 2
+  let expected_A precision (1 / (1 + (10 ^ ((I_B - I_A) / 400)))) 2
   ifelse random-float 1 <= expected_A [ ;player A won
     ask playerA [
       set rating rating + k * ( 1 - expected_A )
       set current_tournament_wins current_tournament_wins + 1
+      set benefit_history lput benefit_A benefit_history
+      if length benefit_history > NUM_LEARNING_GAMES [
+        set benefit_history but-first benefit_history
+      ]
+      set games_played games_played + 1
     ]
     ask playerB [
       set rating rating + k * ( 0 - (1 - expected_A) )
+      set benefit_history lput benefit_B benefit_history
+      if length benefit_history > NUM_LEARNING_GAMES [
+        set benefit_history but-first benefit_history
+      ]
+      set games_played games_played + 1
     ]
   ]
   [ ; player B won
     ask playerA [
       set rating rating + k * ( 0 - expected_A )
+      set benefit_history lput benefit_A benefit_history
+      if length benefit_history > NUM_LEARNING_GAMES [
+        set benefit_history but-first benefit_history
+      ]
+      set games_played games_played + 1
     ]
     ask playerB [
       set rating rating + k * ( 1 - (1 - expected_A) )
       set current_tournament_wins current_tournament_wins + 1
+      set benefit_history lput benefit_B benefit_history
+      if length benefit_history > NUM_LEARNING_GAMES [
+        set benefit_history but-first benefit_history
+      ]
+      set games_played games_played + 1
     ]
   ]
 end
@@ -294,10 +320,10 @@ to-report getColor [rtng s]
   let center 2000
   let flatness 300
   if s = "M" [
-    report 61 + 9.5 * (exp ((rtng - center) / flatness) / (exp ((rtng - center) / flatness) + 1))
+    report 61 + 9 * (exp ((rtng - center) / flatness) / (exp ((rtng - center) / flatness) + 1))
   ]
   if s = "W"[
-    report 21 + 9.5 * (exp ((rtng - center) / flatness) / (exp ((rtng - center) / flatness) + 1))
+    report 21 + 9 * (exp ((rtng - center) / flatness) / (exp ((rtng - center) / flatness) + 1))
   ]
 end
 @#$#@#$#@
@@ -370,10 +396,10 @@ PLOT
 Ratings distribution
 Rating
 NIL
-1000.0
-3000.0
+500.0
+3500.0
 0.0
-170.0
+190.0
 true
 false
 "" ""
@@ -398,6 +424,24 @@ false
 "set-histogram-num-bars 20" ""
 PENS
 "default" 1.0 1 -16777216 true "" "set-histogram-num-bars 20\nhistogram ([current_tournament] of turtles with [current_tournament_type = \"women's\"])"
+
+PLOT
+688
+262
+953
+445
+Learning
+NIL
+NIL
+0.0
+40.0
+0.0
+15.0
+true
+false
+"" ""
+PENS
+"default" 1.0 1 -16777216 true "" "set-histogram-num-bars 20\nhistogram ( [mean benefit_history] of turtles)"
 
 @#$#@#$#@
 ## WHAT IS IT?
