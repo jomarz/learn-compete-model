@@ -33,13 +33,13 @@ to setup
   clear-all
   reset-ticks
   set NUM_PLAYERS 1369
-  set FEMALE_FRACTION 0.9
+  set FEMALE_FRACTION 0.5
   set MEAN_RATING_MEN 2000
   set MEAN_RATING_WOMEN 1850
   set SD_RATING_MEN 200
   set SD_RATING_WOMEN 200
-  set NUM_PLAYERS_TOURNAMENT 8
-  set ROUNDS 6
+  set NUM_PLAYERS_TOURNAMENT 100
+  set ROUNDS 8
   set MAX_BENEFIT 100
   set IDEAL_CHALLENGE 100
   set BENEFIT_SPREAD 100
@@ -76,7 +76,6 @@ to setup
 end
 
 to go
-  ask turtles [set color green]
   assign-tournaments
   play-tournaments
   tick
@@ -139,13 +138,13 @@ end
 
 to play-tournaments
   let w_tournaments max [current_tournament] of turtles with [current_tournament_type = "women's"]
-;  let o_tournaments max [current_tournament] of turtles with [current_tournament_type = "open"]
+  let o_tournaments max [current_tournament] of turtles with [current_tournament_type = "open"]
   foreach n-values w_tournaments [ i -> i + 1] [ ; play every women's tournament
    num_tournament -> play-one-tournament num_tournament "women's"
   ]
-;  foreach n-values o_tournaments [ i -> i + 1] [ ; play every open tournament
-;  num_tournament -> play-one-tournament num_tournament "open"
-;  ]
+  foreach n-values o_tournaments [ i -> i + 1] [ ; play every open tournament
+  num_tournament -> play-one-tournament num_tournament "open"
+  ]
 end
 
 to play-one-tournament [num_tournament tournament_type]
@@ -164,10 +163,9 @@ to play-one-tournament [num_tournament tournament_type]
         set has_opponent? true
         set current_tournament_wins current_tournament_wins + 1
         set opponent_history lput nobody opponent_history
-        set color yellow
-        show round_number
-        show players
-        foreach players [player -> ask player [show word current_tournament_wins opponent_history]]
+;        show round_number
+;        show players
+;        foreach players [player -> ask player [show word current_tournament_wins opponent_history]]
       ]
       ;set players but-last players
     ]
@@ -178,6 +176,7 @@ to play-one-tournament [num_tournament tournament_type]
     while [i < (tournament_size - 1)] [;show i show item i players
       ask item i players [
         let fallback nobody
+        let fallback_index -1
         ifelse not has_opponent? [
           set playerA item i players
           let j i + 1
@@ -191,7 +190,10 @@ to play-one-tournament [num_tournament tournament_type]
 ;            show item j players
             if not [has_opponent?] of item j players [
               ifelse member? playerA [opponent_history] of item j players [ ; Player A is already in the history of player B
-                set fallback item j players
+                if fallback = nobody [
+                  set fallback item j players
+                  set fallback_index j
+                ]
                 if not checked? [
                   set i j
                   set checked? true
@@ -203,18 +205,18 @@ to play-one-tournament [num_tournament tournament_type]
                 ]
                 set playerB item j players
                 ; PLAY GAME
-                show round_number
-                show players
-                foreach players [player -> ask player [show word current_tournament_wins opponent_history]]
+;                show (word "round: " round_number "   i: " i "   j: " j "   checked?: "checked?)
+;                show players
+;                foreach players [player -> ask player [show word current_tournament_wins opponent_history]]
                 play-game playerA playerB
                 set opponent_found? true
                 set has_opponent? true
                 set opponent_history lput playerB opponent_history
-                set color blue
+                set color getColor rating sex
                 ask item j players [
                   set has_opponent? true
                   set opponent_history lput playerA opponent_history
-                  set color white
+                  set color getColor rating sex
                 ]
                 ;wait 0.03
               ]
@@ -222,22 +224,22 @@ to play-one-tournament [num_tournament tournament_type]
             set j j + 1
           ]
           if not opponent_found? and (j >= tournament_size) [
-            set i i + 1 output-show playerA
+            set i fallback_index + 1
             set playerB fallback
             ; PLAY GAME
-            show round_number
-            show players
-            foreach players [player -> ask player [show word current_tournament_wins opponent_history]]
+;            show (word "round: " round_number "   i: " i "   j: " j "   checked?: "checked?)
+;            show players
+;            foreach players [player -> ask player [show word current_tournament_wins opponent_history]]
             play-game playerA playerB
 ;            if fallback = nobody [inspect playerA show [opponent_history] of playerA show i]
             set opponent_found? true
             set has_opponent? true
             set opponent_history lput playerB opponent_history
-            set color red
+            set color getColor rating sex
             ask fallback [
               set has_opponent? true
               set opponent_history lput playerA opponent_history
-              set color pink
+              set color getColor rating sex
             ]
             ;wait 0.03
           ]
@@ -246,9 +248,9 @@ to play-one-tournament [num_tournament tournament_type]
       ]
     ]
     set round_number round_number + 1
-    show round_number
-    show players
-    foreach players [player -> ask player [show word current_tournament_wins opponent_history]]
+;    show round_number
+;    show players
+;    foreach players [player -> ask player [show word current_tournament_wins opponent_history]]
   ]
 end
 
@@ -292,21 +294,21 @@ to-report getColor [rtng s]
   let center 2000
   let flatness 300
   if s = "M" [
-    report 69 - 7.5 * (exp ((rtng - center) / flatness) / (exp ((rtng - center) / flatness) + 1))
+    report 61 + 9.5 * (exp ((rtng - center) / flatness) / (exp ((rtng - center) / flatness) + 1))
   ]
   if s = "W"[
-    report 29 - 7.5 * (exp ((rtng - center) / flatness) / (exp ((rtng - center) / flatness) + 1))
+    report 21 + 9.5 * (exp ((rtng - center) / flatness) / (exp ((rtng - center) / flatness) + 1))
   ]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
 132
 10
-275
-154
+660
+539
 -1
 -1
-45.0
+13.0
 1
 10
 1
@@ -316,10 +318,10 @@ GRAPHICS-WINDOW
 1
 1
 1
--1
-1
--1
-1
+0
+39
+0
+39
 0
 0
 1
@@ -361,11 +363,11 @@ NIL
 1
 
 PLOT
-644
-27
-948
-270
-Ratings Men
+686
+28
+951
+238
+Ratings distribution
 Rating
 NIL
 1000.0
@@ -379,18 +381,11 @@ PENS
 "default" 1.0 1 -10899396 true "" "set-histogram-num-bars 20\nhistogram ([rating] of turtles with [sex = \"M\"])"
 "pen-1" 1.0 1 -955883 true "" "set-histogram-num-bars 20\nhistogram ([rating] of turtles with [sex = \"W\"])"
 
-OUTPUT
-653
-326
-893
-434
-11
-
 PLOT
-1006
-130
-1206
-280
+996
+61
+1196
+211
 Tournaments
 Tournament
 NIL
