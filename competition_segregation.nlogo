@@ -5,8 +5,8 @@ globals [
   FEMALE_FRACTION ; Fraction of the population that is female
   MEAN_RATING_MEN ; Initial average rating of male population
   MEAN_RATING_WOMEN ; Initial average rating of female population
-  SD_RATING_MEN ; Initial standard deviation of male players' rating
-  SD_RATING_WOMEN ; Initial standard deviation of female players' rating
+  SD_RATING_MEN ; Initial standard deviation of male players' rating distribution
+  SD_RATING_WOMEN ; Initial standard deviation of female players' rating distribution
   NUM_PLAYERS_TOURNAMENT ; Number of players participating in a tournament
   ROUNDS ; Total number of rounds that a tournament has
   MAX_BENEFIT ; Maximum learning benefit from a game
@@ -33,13 +33,13 @@ to setup
   clear-all
   reset-ticks
   set NUM_PLAYERS 1369
-  set FEMALE_FRACTION 0.5
+  set FEMALE_FRACTION 0.9
   set MEAN_RATING_MEN 2000
   set MEAN_RATING_WOMEN 1850
   set SD_RATING_MEN 200
   set SD_RATING_WOMEN 200
-  set NUM_PLAYERS_TOURNAMENT 100
-  set ROUNDS 10
+  set NUM_PLAYERS_TOURNAMENT 8
+  set ROUNDS 6
   set MAX_BENEFIT 100
   set IDEAL_CHALLENGE 100
   set BENEFIT_SPREAD 100
@@ -54,8 +54,8 @@ to setup
         set tournament_preference 1 ; Probability that a female player chooses to play in a female-only tournament
         set learning 0 ; Initial total learning
         set benefit_history []
-        set size 0.8
-        set shape "circle"
+        set size 0.9
+        set shape "triangle"
       ]
     ]
     [ ; Else, new male turtle
@@ -76,8 +76,10 @@ to setup
 end
 
 to go
+  ask turtles [set color green]
   assign-tournaments
   play-tournaments
+  tick
 end
 
 to assign-tournaments
@@ -137,18 +139,146 @@ end
 
 to play-tournaments
   let w_tournaments max [current_tournament] of turtles with [current_tournament_type = "women's"]
-  let o_tournaments max [current_tournament] of turtles with [current_tournament_type = "open"]
+;  let o_tournaments max [current_tournament] of turtles with [current_tournament_type = "open"]
   foreach n-values w_tournaments [ i -> i + 1] [ ; play every women's tournament
    num_tournament -> play-one-tournament num_tournament "women's"
   ]
-  foreach n-values o_tournaments [ i -> i + 1] [ ; play every open tournament
-   num_tournament -> play-one-tournament num_tournament "open"
-  ]
+;  foreach n-values o_tournaments [ i -> i + 1] [ ; play every open tournament
+;  num_tournament -> play-one-tournament num_tournament "open"
+;  ]
 end
 
 to play-one-tournament [num_tournament tournament_type]
-  let players reverse sort-on [rating] turtles with [ (current_tournament = num_tournament) and (current_tournament_type = tournament_type) ]
+  let round_number 1
+  let players []
+  while [round_number <= ROUNDS] [
+    ifelse round_number = 1 [
+      set players reverse sort-on [rating] turtles with [ (current_tournament = num_tournament) and (current_tournament_type = tournament_type) ]
+    ]
+    [
+      set players reverse sort-on [current_tournament_wins] turtles with [ (current_tournament = num_tournament) and (current_tournament_type = tournament_type) ]
+    ]
+    foreach players [player -> ask player [set has_opponent? false]]
+    if remainder length players 2 = 1 [
+      ask last players [
+        set has_opponent? true
+        set current_tournament_wins current_tournament_wins + 1
+        set opponent_history lput nobody opponent_history
+        set color yellow
+        show round_number
+        show players
+        foreach players [player -> ask player [show word current_tournament_wins opponent_history]]
+      ]
+      ;set players but-last players
+    ]
+    let tournament_size length players
+    let i 0
+    let playerA nobody
+    let playerB nobody
+    while [i < (tournament_size - 1)] [;show i show item i players
+      ask item i players [
+        let fallback nobody
+        ifelse not has_opponent? [
+          set playerA item i players
+          let j i + 1
+;          show item j players show j
+          let checked? false
+          let opponent_found? false
+          while [ (not opponent_found?) and (j < tournament_size) ] [
+;            show "playerA"
+;            show playerA
+;            show "looking at"
+;            show item j players
+            if not [has_opponent?] of item j players [
+              ifelse member? playerA [opponent_history] of item j players [ ; Player A is already in the history of player B
+                set fallback item j players
+                if not checked? [
+                  set i j
+                  set checked? true
+                ]
+              ]
+              [ ; Player A is not in player B's history
+                if not checked? [
+                  set i j + 1
+                ]
+                set playerB item j players
+                ; PLAY GAME
+                show round_number
+                show players
+                foreach players [player -> ask player [show word current_tournament_wins opponent_history]]
+                play-game playerA playerB
+                set opponent_found? true
+                set has_opponent? true
+                set opponent_history lput playerB opponent_history
+                set color blue
+                ask item j players [
+                  set has_opponent? true
+                  set opponent_history lput playerA opponent_history
+                  set color white
+                ]
+                ;wait 0.03
+              ]
+            ]
+            set j j + 1
+          ]
+          if not opponent_found? and (j >= tournament_size) [
+            set i i + 1 output-show playerA
+            set playerB fallback
+            ; PLAY GAME
+            show round_number
+            show players
+            foreach players [player -> ask player [show word current_tournament_wins opponent_history]]
+            play-game playerA playerB
+;            if fallback = nobody [inspect playerA show [opponent_history] of playerA show i]
+            set opponent_found? true
+            set has_opponent? true
+            set opponent_history lput playerB opponent_history
+            set color red
+            ask fallback [
+              set has_opponent? true
+              set opponent_history lput playerA opponent_history
+              set color pink
+            ]
+            ;wait 0.03
+          ]
+        ]
+        [ set i i + 1 ] ; else, player already has opponent, move pointer in list
+      ]
+    ]
+    set round_number round_number + 1
+    show round_number
+    show players
+    foreach players [player -> ask player [show word current_tournament_wins opponent_history]]
+  ]
+end
 
+to play-game [playerA playerB]
+  if playerB = nobody [inspect playerA show playerA]
+  let benefit_A MAX_BENEFIT * exp (-(( [rating] of playerB - [rating] of playerA - IDEAL_CHALLENGE ) ^ 2) / BENEFIT_SPREAD)
+  let benefit_B MAX_BENEFIT * exp (-(( [rating] of playerA - [rating] of playerB - IDEAL_CHALLENGE ) ^ 2) / BENEFIT_SPREAD)
+  ; FALTA agregar el learning a la historia
+
+  ; FALTA incluir el aprendizaje en la predicción del desarrollo de la partida
+
+  let expected_A precision (1 / (1 + (10 ^ ((([rating] of playerB) - ([rating] of playerA)) / 400)))) 2
+  ifelse random-float 1 <= expected_A [ ;player A won
+    ask playerA [
+      set rating rating + k * ( 1 - expected_A )
+      set current_tournament_wins current_tournament_wins + 1
+    ]
+    ask playerB [
+      set rating rating + k * ( 0 - (1 - expected_A) )
+    ]
+  ]
+  [ ; player B won
+    ask playerA [
+      set rating rating + k * ( 0 - expected_A )
+    ]
+    ask playerB [
+      set rating rating + k * ( 1 - (1 - expected_A) )
+      set current_tournament_wins current_tournament_wins + 1
+    ]
+  ]
 end
 
 to-report get-k-factor [rating1]
@@ -172,11 +302,11 @@ end
 GRAPHICS-WINDOW
 132
 10
-621
-500
+275
+154
 -1
 -1
-13.0
+45.0
 1
 10
 1
@@ -186,10 +316,10 @@ GRAPHICS-WINDOW
 1
 1
 1
--18
-18
--18
-18
+-1
+1
+-1
+1
 0
 0
 1
@@ -225,29 +355,54 @@ T
 T
 OBSERVER
 NIL
-NIL
+G
 NIL
 NIL
 1
 
 PLOT
-648
-14
-952
-257
+644
+27
+948
+270
 Ratings Men
 Rating
 NIL
 1000.0
 3000.0
 0.0
-300.0
+170.0
 true
 false
 "" ""
 PENS
 "default" 1.0 1 -10899396 true "" "set-histogram-num-bars 20\nhistogram ([rating] of turtles with [sex = \"M\"])"
 "pen-1" 1.0 1 -955883 true "" "set-histogram-num-bars 20\nhistogram ([rating] of turtles with [sex = \"W\"])"
+
+OUTPUT
+653
+326
+893
+434
+11
+
+PLOT
+1006
+130
+1206
+280
+Tournaments
+Tournament
+NIL
+0.0
+10.0
+0.0
+100.0
+true
+false
+"set-histogram-num-bars 20" ""
+PENS
+"default" 1.0 1 -16777216 true "" "set-histogram-num-bars 20\nhistogram ([current_tournament] of turtles with [current_tournament_type = \"women's\"])"
 
 @#$#@#$#@
 ## WHAT IS IT?
