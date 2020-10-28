@@ -2,7 +2,8 @@ extensions [array]
 
 globals [
   NUM_PLAYERS ; Total number of players in the simulation
-  FEMALE_FRACTION ; Fraction of the population that is female
+  WOMEN_FRACTION ; Fraction of the population that is female
+  TREATMENT_FRACTION ; Fraction of the women population that will be given specific characteristics being tested
   MEAN_RATING_MEN ; Initial average rating of male population
   MEAN_RATING_WOMEN ; Initial average rating of female population
   SD_RATING_MEN ; Initial standard deviation of male players' rating distribution
@@ -18,7 +19,9 @@ globals [
 turtles-own [ ; Each turtle is a player
   rating ; Elo rating of the player
   sex
-  tournament_preference ; In case of female players, probability they will choose to play in a female tournament over an open one
+  group ; Any group we want to assign players to for experimenting purposes
+  subgroup ;
+  tournament_preference ; In case of female players, probability they will choose to play in a women's tournament over an open one
   k ; K-factor of the Elo system
   learning ; Represents learning
   benefit_history
@@ -34,7 +37,8 @@ to setup
   clear-all
   reset-ticks
   set NUM_PLAYERS 1369
-  set FEMALE_FRACTION 0.5
+  set WOMEN_FRACTION 0.66
+  set TREATMENT_FRACTION 0.5
   set MEAN_RATING_MEN 2000
   set MEAN_RATING_WOMEN 1850
   set SD_RATING_MEN 200
@@ -46,13 +50,20 @@ to setup
   set BENEFIT_SPREAD 80
   set NUM_LEARNING_GAMES 30
   ask patches [
-    ifelse random-float 1 <= FEMALE_FRACTION [ ; New female turtle
+    ifelse random-float 1 <= WOMEN_FRACTION [ ; New female turtle
       sprout 1 [
         set sex "W"
         set rating precision (random-normal MEAN_RATING_WOMEN SD_RATING_WOMEN) 0 ; Initial rating is normally distributed
         set color getColor rating sex
         set k get-k-factor rating
-        set tournament_preference 1 ; Probability that a female player chooses to play in a female-only tournament
+        ifelse random-float 1 < TREATMENT_FRACTION [
+          set tournament_preference 0 ; This is how much she is interested in playing in playing women's tournaments
+          set group "not segregated"
+        ]
+        [
+          set tournament_preference 1 ; Probability that a female player chooses to play in a women-only tournament
+          set group "segregated"
+        ]
         set learning 0 ; Initial total learning
         set benefit_history [0 0]
         set size 0.9
@@ -66,7 +77,7 @@ to setup
         set rating precision (random-normal MEAN_RATING_MEN SD_RATING_MEN) 0 ; Initial rating is normally distributed
         set color getColor rating sex
         set k get-k-factor rating
-        set tournament_preference 0  ; For redundance. Male players dont- get to choose to play a female-only tournament anyway
+        set tournament_preference 0  ; For redundance. Male players dont- get to choose to play a women-only tournament anyway
         set learning 0 ; Initial total learning
         set benefit_history [0 0]
         set size 0.8
@@ -74,6 +85,17 @@ to setup
         set games_played 0
       ]
     ]
+  ]
+  ; Mark players for a CONTROLO GROUP
+  let upper_cut max [rating] of turtles with [group = "not segregated"]
+  ask turtles with [sex = "M" and rating < upper_cut] [
+    set group "control"
+  ]
+  ask turtles with [group = "control" and rating > upper_cut - 100] [
+    set subgroup "top control"
+  ]
+  ask turtles with [group = "not segregated" and rating > upper_cut - 100] [
+    set subgroup "top not segregated"
   ]
   update-plots
 end
@@ -100,9 +122,9 @@ to assign-tournaments
         ifelse random-float 1 <= tournament_preference [
           set current_tournament w_tournament_index
           set current_tournament_type "women's"
-          set w_counter w_counter + 1 ; 1 more player in the current female tournament
+          set w_counter w_counter + 1 ; 1 more player in the current women tournament
           if w_counter = NUM_PLAYERS_TOURNAMENT [
-            set w_tournament_index w_tournament_index + 1 ; Create new female tournament
+            set w_tournament_index w_tournament_index + 1 ; Create new women tournament
             set w_counter 0 ; new female tournament has zero players
           ]
         ]
@@ -405,25 +427,8 @@ false
 "" ""
 PENS
 "default" 1.0 1 -10899396 true "" "set-histogram-num-bars 20\nhistogram ([rating] of turtles with [sex = \"M\"])"
-"pen-1" 1.0 1 -955883 true "" "set-histogram-num-bars 20\nhistogram ([rating] of turtles with [sex = \"W\"])"
-
-PLOT
-996
-61
-1196
-211
-Tournaments
-Tournament
-NIL
-0.0
-10.0
-0.0
-100.0
-true
-false
-"set-histogram-num-bars 20" ""
-PENS
-"default" 1.0 1 -16777216 true "" "set-histogram-num-bars 20\nhistogram ([current_tournament] of turtles with [current_tournament_type = \"women's\"])"
+"pen-1" 1.0 1 -955883 true "" "set-histogram-num-bars 20\nhistogram ([rating] of turtles with [sex = \"W\" and group = \"segregated\"])"
+"pen-2" 1.0 1 -13345367 true "" "set-histogram-num-bars 20\nhistogram ([rating] of turtles with [sex = \"W\" and group = \"not segregated\"])"
 
 PLOT
 688
@@ -441,7 +446,50 @@ true
 false
 "" ""
 PENS
-"default" 1.0 1 -16777216 true "" "set-histogram-num-bars 20\nhistogram ( [mean benefit_history] of turtles)"
+"M" 1.0 0 -13840069 true "" "plotxy ticks mean [mean benefit_history] of max-n-of 20 turtles with [sex = \"M\"] [rating]"
+"W segregated" 1.0 0 -955883 true "" "plotxy ticks mean [mean benefit_history] of max-n-of 20 turtles with [sex = \"W\" and group = \"segregated\"] [rating]"
+"W not segregated" 1.0 0 -13345367 true "" "plotxy ticks mean [mean benefit_history] of turtles with [subgroup = \"top not segregated\"]"
+"Control" 1.0 0 -7500403 true "" "plotxy ticks mean [mean benefit_history] of turtles with [subgroup = \"top control\"]"
+
+PLOT
+982
+37
+1215
+221
+Mean rating
+NIL
+NIL
+0.0
+10.0
+1500.0
+2500.0
+true
+false
+"" ""
+PENS
+"M" 1.0 0 -13840069 true "" "plot mean [rating] of turtles with [sex = \"M\"]"
+"W segregated" 1.0 0 -955883 true "" "plot mean [rating] of turtles with [sex = \"W\" and group = \"segregated\"]"
+"W not segregated" 1.0 0 -13345367 true "" "plot mean [rating] of turtles with [sex = \"W\" and group = \"not segregated\"]"
+
+PLOT
+980
+261
+1249
+439
+Mean rating of Top-20
+NIL
+NIL
+0.0
+10.0
+2200.0
+3500.0
+true
+false
+"" ""
+PENS
+"Men" 1.0 0 -13840069 true "" "plotxy ticks mean [rating] of max-n-of 20 turtles with [sex = \"M\"] [rating]"
+"Women (segregated)" 1.0 0 -955883 true "" "plotxy ticks mean [rating] of max-n-of 20 turtles with [sex = \"W\" and group = \"segregated\"] [rating]"
+"Women (not segregated)" 1.0 0 -13345367 true "" "plotxy ticks mean [rating] of max-n-of 20 turtles with [sex = \"W\" and group = \"not segregated\"] [rating]"
 
 @#$#@#$#@
 ## WHAT IS IT?
