@@ -2,18 +2,19 @@ extensions [array]
 
 globals [
   NUM_PLAYERS ; Total number of players in the simulation
-  WOMEN_FRACTION ; Fraction of the population that is female
-  TREATMENT_FRACTION ; Fraction of the women population that will be given specific characteristics being tested
+  ;WOMEN_FRACTION ; Fraction of the population that is female
+  ;TEST_W_FRACTION ; Fraction of the women population that will be given specific characteristics being tested
   MEAN_RATING_MEN ; Initial average rating of male population
   MEAN_RATING_WOMEN ; Initial average rating of female population
   SD_RATING_MEN ; Initial standard deviation of male players' rating distribution
   SD_RATING_WOMEN ; Initial standard deviation of female players' rating distribution
   NUM_PLAYERS_TOURNAMENT ; Number of players participating in a tournament
   ROUNDS ; Total number of rounds that a tournament has
-  MAX_BENEFIT ; Maximum learning benefit from a game
-  IDEAL_CHALLENGE ; Ideal rating difference (challenge) from which a player learns the most
-  BENEFIT_SPREAD ; Spread of the benefit-vs-challenge curve
+  ;MAX_BENEFIT ; Maximum learning benefit from a game
+  ;IDEAL_CHALLENGE ; Ideal rating difference (challenge) from which a player learns the most
+  ;BENEFIT_SPREAD ; Spread of the benefit-vs-challenge curve
   NUM_LEARNING_GAMES ; Number of tha past games that are taken into account for total learning
+  ;SEGREGATION_PREFERENCE ; For the treatment group of female players, probability they will choose to play in a women's tournament over an open one
 ]
 
 turtles-own [ ; Each turtle is a player
@@ -21,7 +22,7 @@ turtles-own [ ; Each turtle is a player
   sex
   group ; Any group we want to assign players to for experimenting purposes
   subgroup ;
-  tournament_preference ; In case of female players, probability they will choose to play in a women's tournament over an open one
+  segregationPreference ; In case of female players, probability they will choose to play in a women's tournament over an open one
   k ; K-factor of the Elo system
   learning ; Represents learning
   benefit_history
@@ -36,19 +37,20 @@ turtles-own [ ; Each turtle is a player
 to setup
   clear-all
   reset-ticks
-  set NUM_PLAYERS 1369
-  set WOMEN_FRACTION 0.66
-  set TREATMENT_FRACTION 0.5
+;  set NUM_PLAYERS 1369
+  ;set WOMEN_FRACTION 0.20
+  ;set TEST_W_FRACTION 0.5
   set MEAN_RATING_MEN 2000
   set MEAN_RATING_WOMEN 1850
   set SD_RATING_MEN 200
   set SD_RATING_WOMEN 200
   set NUM_PLAYERS_TOURNAMENT 100
   set ROUNDS 8
-  set MAX_BENEFIT 50
-  set IDEAL_CHALLENGE 100
-  set BENEFIT_SPREAD 80
+  ;set MAX_BENEFIT 50
+  ;set IDEAL_CHALLENGE 100
+  ;set BENEFIT_SPREAD 80
   set NUM_LEARNING_GAMES 30
+;  set SEGREGATION_PREFERENCE 0
   ask patches [
     ifelse random-float 1 <= WOMEN_FRACTION [ ; New female turtle
       sprout 1 [
@@ -56,12 +58,12 @@ to setup
         set rating precision (random-normal MEAN_RATING_WOMEN SD_RATING_WOMEN) 0 ; Initial rating is normally distributed
         set color getColor rating sex
         set k get-k-factor rating
-        ifelse random-float 1 < TREATMENT_FRACTION [
-          set tournament_preference 0 ; This is how much she is interested in playing in playing women's tournaments
-          set group "not segregated"
+        ifelse random-float 1 < TEST_W_FRACTION [ ; Female player will be part of the test group of women
+          set segregationPreference SEGREGATION_PREFERENCE ; This is how much she is interested in playing women's tournaments
+          set group "test"
         ]
         [
-          set tournament_preference 1 ; Probability that a female player chooses to play in a women-only tournament
+          set segregationPreference 1 ; Probability that a female player chooses to play in a women-only tournament
           set group "segregated"
         ]
         set learning 0 ; Initial total learning
@@ -77,7 +79,7 @@ to setup
         set rating precision (random-normal MEAN_RATING_MEN SD_RATING_MEN) 0 ; Initial rating is normally distributed
         set color getColor rating sex
         set k get-k-factor rating
-        set tournament_preference 0  ; For redundance. Male players dont- get to choose to play a women-only tournament anyway
+        set segregationPreference 0  ; For redundance. Male players dont- get to choose to play a women-only tournament anyway
         set learning 0 ; Initial total learning
         set benefit_history [0 0]
         set size 0.8
@@ -86,16 +88,19 @@ to setup
       ]
     ]
   ]
-  ; Mark players for a CONTROLO GROUP
-  let upper_cut max [rating] of turtles with [group = "not segregated"]
+  ; Mark players for a CONTROL GROUP
+  let upper_cut max [rating] of turtles with [group = "test"]
   ask turtles with [sex = "M" and rating < upper_cut] [
     set group "control"
   ]
-  ask turtles with [group = "control" and rating > upper_cut - 100] [
+  ask turtles with [group = "control" and rating > upper_cut - 200] [
     set subgroup "top control"
   ]
-  ask turtles with [group = "not segregated" and rating > upper_cut - 100] [
-    set subgroup "top not segregated"
+  ask turtles with [group = "test" and rating > upper_cut - 200] [
+    set subgroup "top test"
+  ]
+  ask turtles with [group = "segregated" and rating > upper_cut - 200] [
+    set subgroup "top segregated"
   ]
   update-plots
 end
@@ -119,7 +124,9 @@ to assign-tournaments
       set opponent_history []
       set has_opponent? false
       ifelse sex = "W" [
-        ifelse random-float 1 <= tournament_preference [
+        ; Player is female, so we check her preference for segregation before assigning her a tournament
+        ifelse random-float 1 <= segregationPreference [
+          ; assign W player to women's tournament
           set current_tournament w_tournament_index
           set current_tournament_type "women's"
           set w_counter w_counter + 1 ; 1 more player in the current women tournament
@@ -128,7 +135,7 @@ to assign-tournaments
             set w_counter 0 ; new female tournament has zero players
           ]
         ]
-        [
+        [ ; assign W player to open tournament
           set current_tournament o_tournament_index
           set current_tournament_type "open"
           set o_counter o_counter + 1 ; One more player in the current open tournament
@@ -149,11 +156,13 @@ to assign-tournaments
       ]
     ]
   ]
+  ; If the last women's tournament is too small, join the two last women's tournaments
   if w_counter < NUM_PLAYERS_TOURNAMENT / 2 [
     ask turtles with [ (current_tournament = w_tournament_index) and (current_tournament_type = "women's") ] [
       set current_tournament current_tournament - 1
     ]
   ]
+  ; If the last open tournament is too small, join the two last open tournaments
   if o_counter < NUM_PLAYERS_TOURNAMENT / 2 [
     ask turtles with [ (current_tournament = o_tournament_index) and (current_tournament_type = "open") ] [
       set current_tournament current_tournament - 1
@@ -266,16 +275,12 @@ to play-one-tournament [num_tournament tournament_type]
               set opponent_history lput playerA opponent_history
               set color getColor rating sex
             ]
-            ;wait 0.03
           ]
         ]
         [ set i i + 1 ] ; else, player already has opponent, move pointer in list
       ]
     ]
     set round_number round_number + 1
-;    show round_number
-;    show players
-;    foreach players [player -> ask player [show word current_tournament_wins opponent_history]]
   ]
 end
 
@@ -300,6 +305,7 @@ to play-game [playerA playerB]
         set benefit_history but-first benefit_history
       ]
       set games_played games_played + 1
+      set k get-k-factor rating
     ]
     ask playerB [
       set rating rating + k * ( 0 - (1 - expected_A) )
@@ -308,6 +314,7 @@ to play-game [playerA playerB]
         set benefit_history but-first benefit_history
       ]
       set games_played games_played + 1
+      set k get-k-factor rating
     ]
   ]
   [ ; player B won
@@ -318,6 +325,7 @@ to play-game [playerA playerB]
         set benefit_history but-first benefit_history
       ]
       set games_played games_played + 1
+      set k get-k-factor rating
     ]
     ask playerB [
       set rating rating + k * ( 1 - (1 - expected_A) )
@@ -327,6 +335,7 @@ to play-game [playerA playerB]
         set benefit_history but-first benefit_history
       ]
       set games_played games_played + 1
+      set k get-k-factor rating
     ]
   ]
 end
@@ -350,13 +359,13 @@ to-report getColor [rtng s]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-132
-10
-660
-539
+81
+13
+449
+382
 -1
 -1
-13.0
+8.0
 1
 10
 1
@@ -367,9 +376,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-39
+44
 0
-39
+44
 0
 0
 1
@@ -377,10 +386,10 @@ ticks
 30.0
 
 BUTTON
-41
-42
-105
-75
+5
+36
+69
+69
 Setup
 setup
 NIL
@@ -394,10 +403,10 @@ NIL
 1
 
 BUTTON
-41
-94
-105
-129
+5
+88
+69
+123
 Go
 go
 T
@@ -411,10 +420,10 @@ NIL
 1
 
 PLOT
-686
-28
-951
-238
+472
+13
+791
+193
 Ratings distribution
 Rating
 NIL
@@ -423,19 +432,19 @@ NIL
 0.0
 190.0
 true
-false
+true
 "" ""
 PENS
-"default" 1.0 1 -10899396 true "" "set-histogram-num-bars 20\nhistogram ([rating] of turtles with [sex = \"M\"])"
-"pen-1" 1.0 1 -955883 true "" "set-histogram-num-bars 20\nhistogram ([rating] of turtles with [sex = \"W\" and group = \"segregated\"])"
-"pen-2" 1.0 1 -13345367 true "" "set-histogram-num-bars 20\nhistogram ([rating] of turtles with [sex = \"W\" and group = \"not segregated\"])"
+"M" 1.0 1 -10899396 true "" "set-histogram-num-bars 20\nhistogram ([rating] of turtles with [sex = \"M\"])"
+"W - seg." 1.0 1 -955883 true "" "set-histogram-num-bars 20\nhistogram ([rating] of turtles with [sex = \"W\" and group = \"segregated\"])"
+"W - test" 1.0 1 -13345367 true "" "set-histogram-num-bars 20\nhistogram ([rating] of turtles with [sex = \"W\" and group = \"test\"])"
 
 PLOT
-688
-262
-953
-445
-Learning
+471
+401
+793
+549
+Learning at the top
 NIL
 NIL
 0.0
@@ -443,19 +452,19 @@ NIL
 0.0
 15.0
 true
-false
+true
 "" ""
 PENS
-"M" 1.0 0 -13840069 true "" "plotxy ticks mean [mean benefit_history] of max-n-of 20 turtles with [sex = \"M\"] [rating]"
-"W segregated" 1.0 0 -955883 true "" "plotxy ticks mean [mean benefit_history] of max-n-of 20 turtles with [sex = \"W\" and group = \"segregated\"] [rating]"
-"W not segregated" 1.0 0 -13345367 true "" "plotxy ticks mean [mean benefit_history] of turtles with [subgroup = \"top not segregated\"]"
-"Control" 1.0 0 -7500403 true "" "plotxy ticks mean [mean benefit_history] of turtles with [subgroup = \"top control\"]"
+"Top M" 1.0 0 -13840069 true "" "plotxy ticks mean [mean benefit_history] of max-n-of 20 turtles with [sex = \"M\"] [rating]"
+"Top W seg." 1.0 0 -955883 true "" "plotxy ticks mean [mean benefit_history] of max-n-of 20 turtles with [sex = \"W\" and group = \"segregated\"] [rating]"
+"Top W test" 1.0 0 -13345367 true "" "plotxy ticks mean [mean benefit_history] of max-n-of 20 turtles with [sex = \"W\" and group = \"test\"] [rating]"
+"Top W" 1.0 0 -1184463 true "" "plotxy ticks mean [mean benefit_history] of max-n-of 20 turtles with [sex = \"W\"] [rating]"
 
 PLOT
-982
-37
-1215
-221
+816
+11
+1134
+196
 Mean rating
 NIL
 NIL
@@ -464,32 +473,163 @@ NIL
 1500.0
 2500.0
 true
-false
+true
 "" ""
 PENS
 "M" 1.0 0 -13840069 true "" "plot mean [rating] of turtles with [sex = \"M\"]"
 "W segregated" 1.0 0 -955883 true "" "plot mean [rating] of turtles with [sex = \"W\" and group = \"segregated\"]"
-"W not segregated" 1.0 0 -13345367 true "" "plot mean [rating] of turtles with [sex = \"W\" and group = \"not segregated\"]"
+"W test" 1.0 0 -13345367 true "" "plot mean [rating] of turtles with [sex = \"W\" and group = \"test\"]"
+"All" 1.0 0 -16777216 true "" "plot mean [rating] of turtles"
 
 PLOT
-980
-261
-1249
-439
+815
+208
+1135
+386
 Mean rating of Top-20
 NIL
 NIL
 0.0
 10.0
 2200.0
-3500.0
+2500.0
 true
-false
+true
 "" ""
 PENS
 "Men" 1.0 0 -13840069 true "" "plotxy ticks mean [rating] of max-n-of 20 turtles with [sex = \"M\"] [rating]"
-"Women (segregated)" 1.0 0 -955883 true "" "plotxy ticks mean [rating] of max-n-of 20 turtles with [sex = \"W\" and group = \"segregated\"] [rating]"
-"Women (not segregated)" 1.0 0 -13345367 true "" "plotxy ticks mean [rating] of max-n-of 20 turtles with [sex = \"W\" and group = \"not segregated\"] [rating]"
+"Women (seg,)" 1.0 0 -955883 true "" "plotxy ticks mean [rating] of max-n-of 20 turtles with [sex = \"W\" and group = \"segregated\"] [rating]"
+"Women (test)" 1.0 0 -13345367 true "" "plotxy ticks mean [rating] of max-n-of 20 turtles with [sex = \"W\" and group = \"test\"] [rating]"
+
+SLIDER
+52
+399
+411
+432
+SEGREGATION_PREFERENCE
+SEGREGATION_PREFERENCE
+0
+1
+1.0
+0.1
+1
+NIL
+HORIZONTAL
+
+PLOT
+471
+208
+792
+390
+Difference of means of the top 20
+NIL
+NIL
+0.0
+10.0
+-180.0
+180.0
+true
+true
+"" ""
+PENS
+"W test - M" 1.0 0 -13345367 true "" "plotxy ticks (mean [rating] of max-n-of 20 turtles with [sex = \"W\" and group = \"test\"] [rating] - mean [rating] of max-n-of 20 turtles with [sex = \"M\"] [rating])"
+"W seg. -  M" 1.0 0 -955883 true "" "plotxy ticks (mean [rating] of max-n-of 20 turtles with [sex = \"W\" and group = \"segregated\"] [rating] - mean [rating] of max-n-of 20 turtles with [sex = \"M\"] [rating])"
+"Zero" 1.0 0 -7500403 true "" "plotxy ticks 0"
+
+PLOT
+817
+397
+1133
+548
+Participation in the top 20
+NIL
+NIL
+0.0
+10.0
+0.0
+20.0
+true
+true
+"" ""
+PENS
+"W (test)" 1.0 0 -13345367 true "" "plotxy ticks count (max-n-of 20 turtles [rating]) with [group = \"test\"]"
+"W (seg.)" 1.0 0 -955883 true "" "plotxy ticks count (max-n-of 20 turtles [rating]) with [group = \"segregated\"]"
+"M" 1.0 0 -13840069 true "" "plotxy ticks count (max-n-of 20 turtles [rating]) with [sex = \"M\"]"
+
+SLIDER
+19
+446
+151
+479
+MAX_BENEFIT
+MAX_BENEFIT
+0
+200
+50.0
+10
+1
+NIL
+HORIZONTAL
+
+SLIDER
+315
+448
+462
+481
+IDEAL_CHALLENGE
+IDEAL_CHALLENGE
+0
+300
+100.0
+10
+1
+NIL
+HORIZONTAL
+
+SLIDER
+163
+447
+303
+480
+BENEFIT_SPREAD
+BENEFIT_SPREAD
+0
+200
+80.0
+10
+1
+NIL
+HORIZONTAL
+
+SLIDER
+50
+492
+222
+525
+WOMEN_FRACTION
+WOMEN_FRACTION
+0
+1
+0.5
+0.05
+1
+NIL
+HORIZONTAL
+
+SLIDER
+242
+494
+414
+527
+TEST_W_FRACTION
+TEST_W_FRACTION
+0
+1
+0.5
+0.05
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -837,6 +977,53 @@ NetLogo 6.0.4
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
+<experiments>
+  <experiment name="experiment" repetitions="10" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="5000"/>
+    <metric>mean [rating] of max-n-of 20 turtles with [sex = "M"] [rating]</metric>
+    <metric>mean [rating] of max-n-of 20 turtles with [group = "segregated"] [rating]</metric>
+    <metric>mean [rating] of max-n-of 20 turtles with [group = "test"] [rating]</metric>
+    <steppedValueSet variable="TOURNAMENT_PREFERENCE_TREATMENT_GROUP" first="0" step="0.1" last="1"/>
+  </experiment>
+  <experiment name="SEGREGATION_PREFERENCE" repetitions="10" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="5000"/>
+    <metric>mean [rating] of max-n-of 20 turtles with [sex = "M"] [rating]</metric>
+    <metric>mean [rating] of max-n-of 20 turtles with [group = "segregated"] [rating]</metric>
+    <metric>mean [rating] of max-n-of 20 turtles with [group = "test"] [rating]</metric>
+    <enumeratedValueSet variable="BENEFIT_SPREAD">
+      <value value="80"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="IDEAL_CHALLENGE">
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="MAX_BENEFIT">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="SEGREGATION_PREFERENCE" first="0" step="0.1" last="1"/>
+  </experiment>
+  <experiment name="SEGREGATION_PREFERENCE_small" repetitions="5" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="4000"/>
+    <metric>mean [rating] of max-n-of 20 turtles with [sex = "M"] [rating]</metric>
+    <metric>mean [rating] of max-n-of 20 turtles with [group = "segregated"] [rating]</metric>
+    <metric>mean [rating] of max-n-of 20 turtles with [group = "test"] [rating]</metric>
+    <enumeratedValueSet variable="BENEFIT_SPREAD">
+      <value value="80"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="IDEAL_CHALLENGE">
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="MAX_BENEFIT">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="SEGREGATION_PREFERENCE" first="0" step="0.2" last="1"/>
+  </experiment>
+</experiments>
 @#$#@#$#@
 @#$#@#$#@
 default
