@@ -176,7 +176,7 @@ to play-tournaments
   foreach n-values w_tournaments [ i -> i + 1] [ ; play every women's tournament
    num_tournament -> play-one-tournament num_tournament "women's"
   ]
-  foreach n-values o_tournaments [ i -> i + 1] [ ; play every open tournament
+  foreach n-values o_tournaments [ i -> i + 1] [ ; play each open tournament
   num_tournament -> play-one-tournament num_tournament "open"
   ]
 end
@@ -295,10 +295,11 @@ to play-game [playerA playerB]
 
   ; FALTA incluir el aprendizaje en la predicción del desarrollo de la partida
 
-  let expected_A precision (1 / (1 + (10 ^ ((I_B - I_A) / 400)))) 2
-  ifelse random-float 1 <= expected_A [ ;player A won
+  let expected_A precision (1 / (1 + (10 ^ ((I_B - I_A) / 400)))) 2 ; This is the expected score in the game taking learning into account
+  let expected_A_fide precision (1 / (1 + (10 ^ ((([rating] of playerB) - ([rating] of playerA)) / 400)))) 2 ; This is the expected score for A in the game as seen from FIDE: only rating difference taken into account, no learning
+  ifelse random-float 1 <= expected_A [ ;player A won (this takes into account learning benefits)
     ask playerA [
-      set rating rating + k * ( 1 - expected_A )
+      set rating rating + k * ( 1 - expected_A_fide ) ; new rating only depends on game result and rating differences, not learning
       set current_tournament_wins current_tournament_wins + 1
       set benefit_history lput benefit_A benefit_history
       if length benefit_history > NUM_LEARNING_GAMES [
@@ -308,7 +309,7 @@ to play-game [playerA playerB]
       set k get-k-factor rating
     ]
     ask playerB [
-      set rating rating + k * ( 0 - (1 - expected_A) )
+      set rating rating + k * ( 0 - (1 - expected_A_fide) ) ; new rating only depends on game result and rating differences, not learning
       set benefit_history lput benefit_B benefit_history
       if length benefit_history > NUM_LEARNING_GAMES [
         set benefit_history but-first benefit_history
@@ -319,7 +320,7 @@ to play-game [playerA playerB]
   ]
   [ ; player B won
     ask playerA [
-      set rating rating + k * ( 0 - expected_A )
+      set rating rating + k * ( 0 - expected_A_fide ) ; new rating only depends on game result and rating differences, not learning
       set benefit_history lput benefit_A benefit_history
       if length benefit_history > NUM_LEARNING_GAMES [
         set benefit_history but-first benefit_history
@@ -328,7 +329,7 @@ to play-game [playerA playerB]
       set k get-k-factor rating
     ]
     ask playerB [
-      set rating rating + k * ( 1 - (1 - expected_A) )
+      set rating rating + k * ( 1 - (1 - expected_A_fide) ) ; new rating only depends on game result and rating differences, not learning
       set current_tournament_wins current_tournament_wins + 1
       set benefit_history lput benefit_B benefit_history
       if length benefit_history > NUM_LEARNING_GAMES [
@@ -510,7 +511,7 @@ SEGREGATION_PREFERENCE
 SEGREGATION_PREFERENCE
 0
 1
-1.0
+0.0
 0.1
 1
 NIL
@@ -610,8 +611,8 @@ WOMEN_FRACTION
 WOMEN_FRACTION
 0
 1
-0.5
-0.05
+0.2
+0.01
 1
 NIL
 HORIZONTAL
@@ -987,7 +988,7 @@ NetLogo 6.0.4
     <metric>mean [rating] of max-n-of 20 turtles with [group = "test"] [rating]</metric>
     <steppedValueSet variable="TOURNAMENT_PREFERENCE_TREATMENT_GROUP" first="0" step="0.1" last="1"/>
   </experiment>
-  <experiment name="SEGREGATION_PREFERENCE" repetitions="10" runMetricsEveryStep="true">
+  <experiment name="SEGREGATION_PREFERENCE" repetitions="20" runMetricsEveryStep="true">
     <setup>setup</setup>
     <go>go</go>
     <timeLimit steps="5000"/>
@@ -1005,10 +1006,10 @@ NetLogo 6.0.4
     </enumeratedValueSet>
     <steppedValueSet variable="SEGREGATION_PREFERENCE" first="0" step="0.1" last="1"/>
   </experiment>
-  <experiment name="SEGREGATION_PREFERENCE_small" repetitions="5" runMetricsEveryStep="true">
+  <experiment name="SEGREGATION_PREFERENCE_small" repetitions="12" runMetricsEveryStep="true">
     <setup>setup</setup>
     <go>go</go>
-    <timeLimit steps="4000"/>
+    <timeLimit steps="5000"/>
     <metric>mean [rating] of max-n-of 20 turtles with [sex = "M"] [rating]</metric>
     <metric>mean [rating] of max-n-of 20 turtles with [group = "segregated"] [rating]</metric>
     <metric>mean [rating] of max-n-of 20 turtles with [group = "test"] [rating]</metric>
@@ -1021,7 +1022,9 @@ NetLogo 6.0.4
     <enumeratedValueSet variable="MAX_BENEFIT">
       <value value="50"/>
     </enumeratedValueSet>
-    <steppedValueSet variable="SEGREGATION_PREFERENCE" first="0" step="0.2" last="1"/>
+    <enumeratedValueSet variable="SEGREGATION_PREFERENCE">
+      <value value="0"/>
+    </enumeratedValueSet>
   </experiment>
 </experiments>
 @#$#@#$#@
