@@ -1,6 +1,8 @@
-extensions [array]
+extensions [csv array]
 
 globals [
+  RATINGS_F_SOURCE ; Source list of female ratings
+  RATINGS_M_SOURCE ; Source list of male ratings
   NUM_PLAYERS ; Total number of players in the simulation
   ;WOMEN_FRACTION ; Fraction of the population that is female
   ;TEST_W_FRACTION ; Fraction of the women population that will be given specific characteristics being tested
@@ -15,6 +17,8 @@ globals [
   ;BENEFIT_SPREAD ; Spread of the benefit-vs-challenge curve
   NUM_LEARNING_GAMES ; Number of tha past games that are taken into account for total learning
   ;SEGREGATION_PREFERENCE ; For the treatment group of female players, probability they will choose to play in a women's tournament over an open one
+  PLAYERS_RETIRE?
+  GAMES_TO_RETIRE
 ]
 
 turtles-own [ ; Each turtle is a player
@@ -37,6 +41,8 @@ turtles-own [ ; Each turtle is a player
 to setup
   clear-all
   reset-ticks
+  set RATINGS_F_SOURCE csv:from-file "ratings_f.csv"
+  set RATINGS_M_SOURCE csv:from-file "ratings_m.csv"
 ;  set NUM_PLAYERS 1369
   ;set WOMEN_FRACTION 0.20
   ;set TEST_W_FRACTION 0.5
@@ -51,11 +57,13 @@ to setup
   ;set BENEFIT_SPREAD 80
   set NUM_LEARNING_GAMES 30
 ;  set SEGREGATION_PREFERENCE 0
+  set PLAYERS_RETIRE? false
+  set GAMES_TO_RETIRE 1000
   ask patches [
     ifelse random-float 1 <= WOMEN_FRACTION [ ; New female turtle
       sprout 1 [
         set sex "W"
-        set rating precision (random-normal MEAN_RATING_WOMEN SD_RATING_WOMEN) 0 ; Initial rating is normally distributed
+        set rating getStartingRating sex
         set color getColor rating sex
         set k get-k-factor rating
         ifelse random-float 1 < TEST_W_FRACTION [ ; Female player will be part of the test group of women
@@ -70,13 +78,13 @@ to setup
         set benefit_history [0 0]
         set size 0.9
         set shape "triangle"
-        set games_played 0
+        set games_played random GAMES_TO_RETIRE
       ]
     ]
     [ ; Else, new male turtle
       sprout 1 [
         set sex "M"
-        set rating precision (random-normal MEAN_RATING_MEN SD_RATING_MEN) 0 ; Initial rating is normally distributed
+        set rating getStartingRating sex
         set color getColor rating sex
         set k get-k-factor rating
         set segregationPreference 0  ; For redundance. Male players dont- get to choose to play a women-only tournament anyway
@@ -84,7 +92,7 @@ to setup
         set benefit_history [0 0]
         set size 0.8
         set shape "circle"
-        set games_played 0
+        set games_played random GAMES_TO_RETIRE
       ]
     ]
   ]
@@ -108,6 +116,9 @@ end
 to go
   assign-tournaments
   play-tournaments
+  if PLAYERS_RETIRE? [
+   renew-players
+  ]
   tick
 end
 
@@ -358,6 +369,45 @@ to-report getColor [rtng s]
     report 21 + 9 * (exp ((rtng - center) / flatness) / (exp ((rtng - center) / flatness) + 1))
   ]
 end
+
+to-report getStartingRating [playerSex]
+  ; Returns the starting rating of a new player
+  let playerRating 0
+  ifelse playerSex = "W" [
+    ; Randomly choose an index based on the length of ratings list
+    let index one-of range length RATINGS_F_SOURCE
+    ; Set turtle's rating choosing that intex from the ratings list
+    set playerRating item 0 item index RATINGS_F_SOURCE
+    ; Remove the indexed value from list (sample without replacement)
+    set RATINGS_F_SOURCE remove-item index RATINGS_F_SOURCE
+    report playerRating
+  ]
+  [ ;else, new male turtle
+    ; Randomly choose an index based on the length of ratings list
+    let index one-of range length RATINGS_M_SOURCE
+    ; Set turtle's rating choosing that intex from the ratings list
+    set playerRating item 0 item index RATINGS_M_SOURCE
+    ; Remove the indexed value from list (sample without replacement)
+    set RATINGS_M_SOURCE remove-item index RATINGS_M_SOURCE
+    report playerRating
+  ]
+end
+
+to renew-players
+  ask turtles with [games_played > GAMES_TO_RETIRE] [
+    let ownSex sex
+    ;set rating [rating] of one-of turtles with [sex = [sex] of myself]
+    ;set rating mean [rating] of turtles with [sex = [sex] of myself and group = [group] of myself]
+    let rating_mean mean [rating] of turtles with [sex = [sex] of myself and group = [group] of myself]
+    let sd standard-deviation [rating] of turtles
+    set rating precision (random-normal rating_mean 220) 0
+    set games_played 0
+    set color getColor rating sex
+    set k get-k-factor rating
+    set learning 0 ; Initial total learning
+    set benefit_history [0 0]
+  ]
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
 81
@@ -423,8 +473,8 @@ NIL
 PLOT
 472
 13
-791
-193
+790
+201
 Ratings distribution
 Rating
 NIL
@@ -566,7 +616,7 @@ MAX_BENEFIT
 MAX_BENEFIT
 0
 200
-50.0
+200.0
 10
 1
 NIL
@@ -581,7 +631,7 @@ IDEAL_CHALLENGE
 IDEAL_CHALLENGE
 0
 300
-100.0
+10.0
 10
 1
 NIL
@@ -596,7 +646,7 @@ BENEFIT_SPREAD
 BENEFIT_SPREAD
 0
 200
-80.0
+50.0
 10
 1
 NIL
@@ -611,7 +661,7 @@ WOMEN_FRACTION
 WOMEN_FRACTION
 0
 1
-0.5
+0.9
 0.01
 1
 NIL
@@ -1031,6 +1081,111 @@ NetLogo 6.0.4
     <enumeratedValueSet variable="SEGREGATION_PREFERENCE">
       <value value="0"/>
     </enumeratedValueSet>
+  </experiment>
+  <experiment name="SEGREGATION_PREFERENCE" repetitions="20" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="3000"/>
+    <metric>mean [rating] of max-n-of 20 turtles with [sex = "M"] [rating]</metric>
+    <metric>mean [rating] of max-n-of 20 turtles with [group = "segregated"] [rating]</metric>
+    <metric>mean [rating] of max-n-of 20 turtles with [group = "test"] [rating]</metric>
+    <enumeratedValueSet variable="BENEFIT_SPREAD">
+      <value value="80"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="IDEAL_CHALLENGE">
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="MAX_BENEFIT">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="WOMEN_FRACTION">
+      <value value="0.67"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="TEST_W_FRACTION">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="SEGREGATION_PREFERENCE" first="0" step="0.1" last="1"/>
+  </experiment>
+  <experiment name="SEGREGATION_W_FRACTION_2010_source" repetitions="20" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="500"/>
+    <metric>mean [rating] of max-n-of 20 turtles with [sex = "M"] [rating]</metric>
+    <metric>mean [rating] of max-n-of 20 turtles with [group = "segregated"] [rating]</metric>
+    <metric>mean [rating] of max-n-of 20 turtles with [group = "test"] [rating]</metric>
+    <enumeratedValueSet variable="BENEFIT_SPREAD">
+      <value value="80"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="IDEAL_CHALLENGE">
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="MAX_BENEFIT">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="WOMEN_FRACTION" first="0.1" step="0.1" last="0.7"/>
+    <enumeratedValueSet variable="TEST_W_FRACTION">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="SEGREGATION_PREFERENCE" first="0" step="0.1" last="1"/>
+  </experiment>
+  <experiment name="PARAMETER_TEST_2010_source" repetitions="20" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="500"/>
+    <metric>mean [rating] of max-n-of 20 turtles with [sex = "M"] [rating]</metric>
+    <metric>mean [rating] of max-n-of 20 turtles with [group = "segregated"] [rating]</metric>
+    <metric>mean [rating] of max-n-of 20 turtles with [group = "test"] [rating]</metric>
+    <enumeratedValueSet variable="BENEFIT_SPREAD">
+      <value value="50"/>
+      <value value="100"/>
+      <value value="150"/>
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="IDEAL_CHALLENGE">
+      <value value="10"/>
+      <value value="50"/>
+      <value value="100"/>
+      <value value="150"/>
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="MAX_BENEFIT">
+      <value value="0"/>
+      <value value="50"/>
+      <value value="100"/>
+      <value value="150"/>
+      <value value="200"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="WOMEN_FRACTION" first="0.1" step="0.1" last="0.9"/>
+    <enumeratedValueSet variable="TEST_W_FRACTION">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="SEGREGATION_PREFERENCE" first="0" step="0.1" last="1"/>
+  </experiment>
+  <experiment name="PARAMETER_TEST_B50_I10_2010_source" repetitions="20" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="500"/>
+    <metric>mean [rating] of max-n-of 20 turtles with [sex = "M"] [rating]</metric>
+    <metric>mean [rating] of max-n-of 20 turtles with [group = "segregated"] [rating]</metric>
+    <metric>mean [rating] of max-n-of 20 turtles with [group = "test"] [rating]</metric>
+    <enumeratedValueSet variable="BENEFIT_SPREAD">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="IDEAL_CHALLENGE">
+      <value value="10"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="MAX_BENEFIT">
+      <value value="0"/>
+      <value value="50"/>
+      <value value="100"/>
+      <value value="150"/>
+      <value value="200"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="WOMEN_FRACTION" first="0.1" step="0.1" last="0.9"/>
+    <enumeratedValueSet variable="TEST_W_FRACTION">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="SEGREGATION_PREFERENCE" first="0" step="0.1" last="1"/>
   </experiment>
 </experiments>
 @#$#@#$#@
