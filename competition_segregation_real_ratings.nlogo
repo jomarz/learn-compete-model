@@ -38,6 +38,7 @@ turtles-own [ ; Each turtle is a player
   games_played
   prev_rating
   last_challenge
+  positive_of_last_challenge
   last_opponent_sex
   last_opponent_group
 ]
@@ -68,7 +69,7 @@ to setup
       sprout 1 [
         set sex "W"
         set rating getStartingRating sex
-        set color getColor rating sex
+        ;set color getColor rating sex
         set k get-k-factor rating
         ifelse random-float 1 < TEST_W_FRACTION [ ; Female player will be part of the test group of women
           set segregationPreference SEGREGATION_PREFERENCE ; This is how much she is interested in playing women's tournaments
@@ -79,6 +80,8 @@ to setup
           set group "segregated"
         ]
         set learning 0 ; Initial total learning
+        set last_challenge 0
+        set positive_of_last_challenge 0
         set benefit_history [0 0]
         set size 0.9
         set shape "triangle"
@@ -89,13 +92,15 @@ to setup
       sprout 1 [
         set sex "M"
         set rating getStartingRating sex
-        set color getColor rating sex
+        ;set color getColor rating sex
         set k get-k-factor rating
         set segregationPreference 0  ; For redundance. Male players dont- get to choose to play a women-only tournament anyway
         set learning 0 ; Initial total learning
+        set last_challenge 0
+        set positive_of_last_challenge 0
         set benefit_history [0 0]
-        set size 0.8
-        set shape "circle"
+        ;set size 0.8
+        ;set shape "circle"
         set games_played random GAMES_TO_RETIRE
       ]
     ]
@@ -261,11 +266,11 @@ to play-one-tournament [num_tournament tournament_type]
                 set opponent_found? true
                 set has_opponent? true
                 set opponent_history lput playerB opponent_history
-                set color getColor rating sex
+                ;set color getColor rating sex
                 ask item j players [
                   set has_opponent? true
                   set opponent_history lput playerA opponent_history
-                  set color getColor rating sex
+                  ;set color getColor rating sex
                 ]
                 ;wait 0.03
               ]
@@ -284,11 +289,11 @@ to play-one-tournament [num_tournament tournament_type]
             set opponent_found? true
             set has_opponent? true
             set opponent_history lput playerB opponent_history
-            set color getColor rating sex
+            ;set color getColor rating sex
             ask fallback [
               set has_opponent? true
               set opponent_history lput playerA opponent_history
-              set color getColor rating sex
+              ;set color getColor rating sex
             ]
           ]
         ]
@@ -311,12 +316,24 @@ to play-game [playerA playerB]
   ask playerA [
     set prev_rating rating
     set last_challenge [rating] of playerB - rating
+    ifelse last_challenge > 0 [
+      set positive_of_last_challenge last_challenge
+    ]
+    [ ;last game was not a positive challege
+      set positive_of_last_challenge 0
+    ]
     set last_opponent_sex [sex] of playerB
     set last_opponent_group [group] of playerB
   ]
   ask playerB [
     set prev_rating rating
     set last_challenge [rating] of playerA - rating
+    ifelse last_challenge > 0 [
+      set positive_of_last_challenge last_challenge
+    ]
+    [ ;last game was not a positive challege
+      set positive_of_last_challenge 0
+    ]
     set last_opponent_sex [sex] of playerA
     set last_opponent_group [group] of playerA
   ]
@@ -633,7 +650,7 @@ MAX_BENEFIT
 MAX_BENEFIT
 0
 200
-400.0
+200.0
 10
 1
 NIL
@@ -648,7 +665,7 @@ IDEAL_CHALLENGE
 IDEAL_CHALLENGE
 0
 300
-400.0
+50.0
 10
 1
 NIL
@@ -663,7 +680,7 @@ BENEFIT_SPREAD
 BENEFIT_SPREAD
 0
 200
-400.0
+200.0
 10
 1
 NIL
@@ -1253,6 +1270,52 @@ NetLogo 6.0.4
     <enumeratedValueSet variable="SEGREGATION_PREFERENCE">
       <value value="0"/>
     </enumeratedValueSet>
+  </experiment>
+  <experiment name="CHALLENGE_BASE_2010_BS200_MB200" repetitions="20" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="500"/>
+    <metric>mean [rating] of max-n-of 20 turtles with [sex = "M"] [rating]</metric>
+    <metric>mean [rating] of max-n-of 20 turtles with [group = "segregated"] [rating]</metric>
+    <metric>mean [rating] of max-n-of 20 turtles with [group = "test"] [rating]</metric>
+    <metric>mean [last_challenge] of max-n-of 20 turtles with [sex = "M"] [rating]</metric>
+    <metric>mean [last_challenge] of max-n-of 20 turtles with [group = "segregated"] [rating]</metric>
+    <metric>mean [last_challenge] of max-n-of 20 turtles with [group = "test"] [rating]</metric>
+    <metric>mean [positive_of_last_challenge] of max-n-of 20 turtles with [sex = "M"] [rating]</metric>
+    <metric>mean [positive_of_last_challenge] of max-n-of 20 turtles with [group = "segregated"] [rating]</metric>
+    <metric>mean [positive_of_last_challenge] of max-n-of 20 turtles with [group = "test"] [rating]</metric>
+    <metric>mean [rating] of turtles with [sex = "M"]</metric>
+    <metric>mean [rating] of turtles with [group = "segregated"]</metric>
+    <metric>mean [rating] of turtles with [group = "test"]</metric>
+    <enumeratedValueSet variable="BENEFIT_SPREAD">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="IDEAL_CHALLENGE">
+      <value value="50"/>
+      <value value="100"/>
+      <value value="150"/>
+      <value value="200"/>
+      <value value="250"/>
+      <value value="300"/>
+      <value value="350"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="MAX_BENEFIT">
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="WOMEN_FRACTION">
+      <value value="0.08"/>
+      <value value="0.1"/>
+      <value value="0.2"/>
+      <value value="0.3"/>
+      <value value="0.4"/>
+      <value value="0.5"/>
+      <value value="0.6"/>
+      <value value="0.7"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="TEST_W_FRACTION">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="SEGREGATION_PREFERENCE" first="0" step="0.1" last="1"/>
   </experiment>
 </experiments>
 @#$#@#$#@
