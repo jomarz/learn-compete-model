@@ -311,13 +311,13 @@ to play-game [playerA playerB]
   ask playerA [
     set prev_rating rating
     set last_challenge [rating] of playerB - rating
-    set last_opponent_sex [sex] of playerB
+    set last_opponent_sex  [sex] of playerB
     set last_opponent_group [group] of playerB
   ]
   ask playerB [
     set prev_rating rating
     set last_challenge [rating] of playerA - rating
-    set last_opponent_sex [sex] of playerA
+    set last_opponent_sex = [sex] of playerA
     set last_opponent_group [group] of playerA
   ]
 
